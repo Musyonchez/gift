@@ -1,0 +1,364 @@
+---
+title: "PARTIAL LEAST SQUARES (PLS) REGRESSION"
+author: "Gift"
+date: "2026-02-11"
+output: html_document
+---
+
+## 1. Research & Theory (20%)
+
+### Concept of Partial Least Squares (PLS)
+
+Partial Least Squares (PLS) regression is a supervised dimension-reduction technique used to model the relationship between a set of predictor variables **X** and a continuous response variable **y**.
+
+PLS constructs a smaller number of latent components as linear combinations of the original predictors such that these components:
+
+- Explain variation in the predictors, and
+- Maximize covariance between predictors and the response
+
+This makes PLS particularly effective when predictors are highly correlated or when the number of predictors is large relative to the sample size.
+
+### Difference Between PLS and Principal Component Regression (PCR)
+
+| Feature | PCR | PLS |
+|---------|-----|-----|
+| Uses response variable when creating components | No | Yes |
+| Objective | Maximize variance in predictors | Maximize covariance between X and Y |
+| Predictive performance | Often weaker | Usually stronger |
+| Supervised learning | No | Yes |
+
+**Key idea:** PCR ignores the response variable during component construction, while PLS explicitly incorporates it, leading to improved prediction accuracy.
+
+### When PLS is Preferred
+
+PLS is preferred when:
+
+- Predictors exhibit strong multicollinearity
+- Prediction accuracy is more important than interpretability
+- Sample size is small relative to the number of predictors
+- LASSO removes too many predictors or Ridge still shows instability
+
+### References (Theory)
+
+- Hastie, T., Tibshirani, R., & Friedman, J. (2017). *The Elements of Statistical Learning*. Springer.
+- Wold, H. (1975). Soft modeling by latent variables: The nonlinear iterative partial least squares approach.
+- Mevik, B.-H., & Wehrens, R. (2007). The pls package: Principal component and partial least squares regression in R. *Journal of Statistical Software*.
+
+### Code: Demonstrating Multicollinearity
+
+To motivate the use of PLS, we first examine the correlation structure among predictors in the Hitters dataset, which demonstrates why dimension reduction is necessary.
+
+```{r theory-demo}
+# Load required packages
+library(ISLR)
+library(corrplot)
+
+# Load and clean data
+data(Hitters)
+df_demo <- na.omit(Hitters)
+
+# Select numeric predictors
+numeric_vars <- df_demo[, sapply(df_demo, is.numeric)]
+numeric_vars <- numeric_vars[, !names(numeric_vars) %in% c("Salary")]
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_vars)
+
+# Display high correlations (> 0.7)
+cat("\nPairs of predictors with correlation > 0.7:\n")
+high_cor <- which(abs(cor_matrix) > 0.7 & abs(cor_matrix) < 1, arr.ind = TRUE)
+for(i in 1:nrow(high_cor)) {
+  if(high_cor[i,1] < high_cor[i,2]) {
+    cat(sprintf("%s & %s: %.3f\n", 
+                rownames(cor_matrix)[high_cor[i,1]], 
+                colnames(cor_matrix)[high_cor[i,2]], 
+                cor_matrix[high_cor[i,1], high_cor[i,2]]))
+  }
+}
+
+# Visualize correlation matrix
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+         title = "Correlation Matrix of Predictors",
+         mar = c(0,0,1,0))
+```
+
+**Output Interpretation:** High correlations (>0.7) between predictors like AtBat & Hits, CAtBat & CHits indicate severe multicollinearity. This justifies the use of PLS to create orthogonal components that avoid this issue.
+
+---
+
+## 2. Data Acquisition (20%)
+
+### Dataset Selection
+
+For this analysis, the **"Hitters"** dataset from the ISLR R package was selected. This dataset contains statistics for professional baseball players and is widely used in regression examples. It includes multiple numeric and categorical predictors and a continuous response variable, making it suitable for Partial Least Squares (PLS) regression.
+
+### Dataset Details
+
+- **Source:** ISLR R package (Hitters dataset)
+- **Sample Size:** 263 professional baseball players
+- **Predictor Variables (18 total):**
+  1. AtBat – Number of times at bat in 1986
+  2. Hits – Number of hits in 1986
+  3. HmRun – Number of home runs in 1986
+  4. Runs – Number of runs in 1986
+  5. RBI – Number of runs batted in 1986
+  6. Walks – Number of walks in 1986
+  7. Years – Number of years in major leagues
+  8. CAtBat – Career at bats
+  9. CHits – Career hits
+  10. CHmRun – Career home runs
+  11. CRuns – Career runs
+  12. CRBI – Career runs batted in
+  13. CWalks – Career walks
+  14. League – League (A or N) – categorical
+  15. Division – Division (E or W) – categorical
+  16. NewLeague – New league in 1987 – categorical
+  17. **Salary** – 1987 salary – **continuous response**
+  18. PlayerID – Player name – identifier (excluded from predictors)
+
+For PLS analysis, **Salary** is the response variable, and all other numeric and properly encoded categorical variables are predictors.
+
+### Why the Dataset is Suitable for PLS
+
+1. **Multiple Predictors:** The dataset contains more than 10 predictor variables.
+2. **Multicollinearity:** Several career statistics are highly correlated (e.g., Hits, AtBat, CHits), making PLS appropriate.
+3. **Continuous Response Variable:** Salary allows regression modeling.
+4. **Predictive Modeling:** Enables comparison between PLS, Ridge, and LASSO methods in terms of predictive accuracy.
+
+### Reference
+
+- James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. Springer. (Hitters dataset)
+
+### Code: Loading and Preparing the Dataset
+
+```{r data-loading}
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# Install ISLR if not already installed
+if (!require(ISLR)) {
+  install.packages("ISLR", dependencies = TRUE)
+}
+
+# Load packages
+library(ISLR)
+
+# Load the dataset
+data(Hitters)
+df <- na.omit(Hitters)  # Remove rows with missing values
+
+# Encode categorical variables as numeric
+df$League <- as.numeric(factor(df$League))
+df$Division <- as.numeric(factor(df$Division))
+df$NewLeague <- as.numeric(factor(df$NewLeague))
+
+# Separate response and predictors
+y <- df$Salary
+X <- df[, !names(df) %in% c("Salary", "PlayerID")]
+
+# Check dataset structure
+str(df)
+summary(df)
+```
+
+---
+
+## 3. Model Fitting & Analysis (40%)
+
+### Explanation: PLS Model Fitting
+
+Partial Least Squares regression will be fitted using cross-validation to determine the optimal number of components. The `pls` package in R provides the `plsr()` function for this purpose.
+
+**Steps:**
+
+1. Fit PLS model with cross-validation
+2. Identify optimal number of components based on RMSEP (Root Mean Squared Error of Prediction)
+3. Refit final model with optimal components
+4. Extract coefficients and create diagnostic plots
+
+### Code: Fitting the PLS Model
+
+```{r pls-model}
+# Load required package
+if (!require(pls)) {
+  install.packages("pls", dependencies = TRUE)
+}
+library(pls)
+
+# Prepare data for modeling (exclude PlayerID)
+df_model <- df[, !names(df) %in% "PlayerID"]
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Fit PLS model with cross-validation
+pls_model <- plsr(Salary ~ ., data = df_model, scale = TRUE, validation = "CV")
+
+# Display model summary
+summary(pls_model)
+
+# Determine optimal number of components
+rmsep_vals <- RMSEP(pls_model)$val[1,,]
+optimal_comp <- which.min(rmsep_vals)
+cat("Optimal number of components:", optimal_comp, "\n")
+
+# Refit final model with optimal components
+pls_final <- plsr(Salary ~ ., data = df_model, ncomp = optimal_comp, scale = TRUE)
+
+# Display coefficients
+coef(pls_final)
+```
+
+### Code: Diagnostic Plots
+
+```{r pls-diagnostics}
+# RMSEP validation plot
+validationplot(pls_model, val.type = "RMSEP")
+
+# PLS Scores plot
+plot(pls_final$scores, main="PLS Scores Plot", xlab="Component 1", ylab="Component 2")
+
+# PLS Loadings plot
+plot(pls_final$loadings, main="PLS Loadings Plot")
+
+# Save RMSEP plot
+png("RMSEP_plot.png", width=800, height=600)
+validationplot(pls_model, val.type="RMSEP")
+dev.off()
+```
+
+---
+
+## 4. Interpretation & Discussion (20%)
+
+### Predictor Retention
+
+- **LASSO:** Removes predictors by setting coefficients exactly to zero
+- **Ridge:** Retains all predictors with coefficient shrinkage
+- **PLS:** Retains all predictors indirectly via latent components
+
+Thus, PLS emphasizes **prediction** rather than variable selection.
+
+### Handling Multicollinearity
+
+| Method | Strategy |
+|--------|----------|
+| Ridge | Shrinks correlated coefficients |
+| PLS | Replaces predictors with orthogonal latent components |
+
+PLS structurally removes multicollinearity by working in a transformed feature space.
+
+### Code: Model Interpretation & Comparison
+
+Now we examine the PLS model structure, coefficient estimates, and variable importance.
+
+```{r interpretation}
+# Load required package
+library(pls)
+
+# Display PLS coefficients
+cat("PLS Regression Coefficients:\n")
+pls_coefs <- coef(pls_final, ncomp = optimal_comp)
+print(round(pls_coefs, 4))
+
+# Calculate Variable Importance in Projection (VIP) scores manually
+# VIP measures the importance of each variable in the PLS model
+cat("\n\nVariable Importance in Projection (VIP):\n")
+
+# Extract loadings and weights from PLS model
+loadings_mat <- pls_final$loadings[, 1:optimal_comp]
+weights_mat <- pls_final$loading.weights[, 1:optimal_comp]
+
+# Calculate explained variance for each component
+ss <- apply(pls_final$scores[, 1:optimal_comp]^2, 2, sum)
+total_ss <- sum(ss)
+
+# Calculate VIP scores
+p <- nrow(loadings_mat)
+vip_scores <- sqrt(p * apply(weights_mat^2 %*% diag(ss/total_ss), 1, sum))
+names(vip_scores) <- rownames(loadings_mat)
+
+# Create data frame and sort by VIP
+vip_df <- data.frame(
+  Variable = names(vip_scores),
+  VIP = vip_scores
+)
+vip_df <- vip_df[order(vip_df$VIP, decreasing = TRUE), ]
+print(head(vip_df, 10))
+
+# Plot variable importance
+barplot(sort(vip_scores, decreasing = TRUE)[1:10], 
+        las = 2, 
+        main = "Top 10 Most Important Variables in PLS",
+        ylab = "VIP Score",
+        col = "steelblue",
+        cex.names = 0.8)
+abline(h = 1, col = "red", lty = 2, lwd = 2)
+legend("topright", legend = "VIP = 1 threshold", 
+       col = "red", lty = 2, cex = 0.8)
+
+# Model performance metrics
+cat("\n\nModel Performance Metrics:\n")
+cat("Number of components used:", optimal_comp, "\n")
+cat("RMSEP (Cross-Validation):", min(rmsep_vals), "\n")
+
+# Variance explained
+R2_values <- R2(pls_model, estimate = "CV")$val[1,,]
+cat("R² (Cross-Validation):", R2_values[optimal_comp], "\n")
+
+# Predictions vs Actual
+predictions <- predict(pls_final, newdata = df_model, ncomp = optimal_comp)
+actual <- df_model$Salary
+
+# Calculate additional metrics
+rmse <- sqrt(mean((predictions - actual)^2))
+mae <- mean(abs(predictions - actual))
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+
+# Plot Predicted vs Actual
+plot(actual, predictions, 
+     main = "PLS: Predicted vs Actual Salaries",
+     xlab = "Actual Salary ($1000s)",
+     ylab = "Predicted Salary ($1000s)",
+     pch = 16, col = rgb(0, 0, 1, 0.5))
+abline(0, 1, col = "red", lwd = 2)
+legend("topleft", legend = c("Perfect Prediction", "Actual Predictions"),
+       col = c("red", "blue"), lty = c(1, NA), pch = c(NA, 16))
+
+# Add correlation coefficient
+cor_val <- cor(actual, predictions)
+text(max(actual)*0.2, max(predictions)*0.9, 
+     sprintf("Correlation: %.3f", cor_val), 
+     cex = 1.2, font = 2)
+```
+
+### Output Interpretation
+
+**Variable Importance:**
+- Variables with VIP > 1 are considered influential in the model
+- Career statistics (CAtBat, CHits, CRuns) typically show high importance
+- PLS automatically weights predictors based on their relationship with the response
+
+**Model Performance:**
+- Lower RMSEP indicates better predictive accuracy
+- R² shows the proportion of variance explained by the optimal number of components
+- The Predicted vs Actual plot shows the model's fit quality
+
+### Predictive Performance
+
+- PLS often achieves lower RMSE than PCR
+- Performance is typically comparable to or better than Ridge when predictors are highly correlated
+- Less interpretable than LASSO but often more stable
+
+### Conclusion
+
+Partial Least Squares regression effectively addressed multicollinearity by transforming the predictor space into orthogonal latent components that maximize covariance with the response variable. While PLS does not perform variable selection, it provides stable coefficient estimates and competitive predictive performance. 
+
+The Variable Importance in Projection (VIP) scores reveal which predictors contribute most to the PLS components, with career statistics showing the strongest influence on salary predictions. The model demonstrates good predictive accuracy as evidenced by cross-validated RMSEP and R² values.
+
+In applications where predictors are highly correlated and prediction accuracy is prioritized, PLS serves as a strong alternative to Ridge and LASSO regression. The orthogonal component structure eliminates multicollinearity issues while maintaining the predictive information from all variables.
+
+
+
