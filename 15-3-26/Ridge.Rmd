@@ -1,13 +1,25 @@
 ---
 title: "Ridge Regression"
-author: "Group 1"
-date: "2025-01-21"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "c:/Users/Admin/Documents/gift")
+
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# Install required packages if not already installed
+required_packages <- c("ggplot2", "reshape2", "readr", "glmnet", "dplyr", 
+                       "tidyr", "caret", "car")
+
+for (package in required_packages) {
+  if (!require(package, character.only = TRUE, quietly = TRUE)) {
+    install.packages(package, dependencies = TRUE)
+    library(package, character.only = TRUE)
+  }
+}
 ```
 
 ## Ridge Regression

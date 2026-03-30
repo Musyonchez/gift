@@ -1,0 +1,847 @@
+---
+title: "Ridge Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "c:/Users/Admin/Documents/gift")
+
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# Install required packages if not already installed
+required_packages <- c("ggplot2", "reshape2", "readr", "glmnet", "dplyr", 
+                       "tidyr", "caret", "car")
+
+for (package in required_packages) {
+  if (!require(package, character.only = TRUE, quietly = TRUE)) {
+    install.packages(package, dependencies = TRUE)
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+## Ridge Regression
+
+### What is Ridge Regression?
+
+Ridge regression, also known as Tikhonov regularization, is a type of linear regression that incorporates a regularization term to address specific challenges that arise in ordinary least squares (OLS) regression. Unlike standard regression, which minimizes only the residual sum of squares, ridge regression adds a penalty proportional to the square of the magnitude of coefficients, thus shrinking their values.
+
+### Mathematical Formulation
+
+Ridge regression minimizes the following objective function:
+
+$$\min_{\beta} \|y - X\beta\|^2 + \lambda\|\beta\|^2$$
+
+where:
+
+- $X$: The design matrix of predictors (independent variables).
+- $y$: The response vector (dependent variable).
+- $\beta$: The vector of regression coefficients.
+- $\lambda$: A non-negative regularization parameter that controls the strength of the penalty term.
+
+By tuning the regularization parameter $\lambda$, ridge regression balances model complexity and performance, leading to more stable predictions.
+
+### A Type of Linear Regression with Regularization
+
+Ridge regression extends OLS by adding the penalty term $\lambda\|\beta\|^2$. This modification helps control the model complexity, reducing the risk of overfitting when the model is too flexible or when multicollinearity (high correlation among predictors) is present.
+
+### The Problem of Overfitting and Multicollinearity
+
+1. **Overfitting:** Overfitting occurs when a model captures noise in the training data rather than the underlying data distribution. This results in poor performance on unseen data. Overfitting is common when the number of predictors is large or when the model is too complex relative to the data size.
+
+2. **Multicollinearity:** In multicollinearity, predictors are highly correlated, causing instability in OLS coefficient estimates. This instability arises because the matrix $X^TX$ becomes nearly singular, leading to large variances in estimated coefficients. Small changes in data can result in disproportionately large changes in the coefficients.
+
+For example, if the condition number of $X^TX$ is very large, the system of normal equations:
+
+$$X^TX\beta = X^Ty$$
+
+becomes numerically unstable.
+
+### In simple terms Ridge regression…
+
+- It modifies the standard linear regression equation by adding a penalty term to the loss function.
+- The standard OLS loss function:
+
+$$\min_{\beta} \sum(y_i - X_i\beta)^2$$
+
+- Ridge Regression adds a penalty:
+
+$$\min_{\beta} \sum(y_i - X_i\beta)^2 + \lambda\sum\beta_j^2$$
+
+where:
+- $\lambda$ (lambda) is the regularization parameter (controls how much we shrink the coefficients).
+- $\sum\beta_j^2$ is the sum of squared coefficients.
+
+### Why Ridge Regression?
+
+Ridge regression addresses the above challenges by:
+
+1. **Reducing Overfitting:** The penalty term in ridge regression discourages large coefficients, thus regularizing the model. This bias introduced by the penalty reduces variance, leading to better generalization on unseen data.
+
+2. **Stabilizing Coefficient Estimates:** Adding $\lambda I_p$ (a diagonal matrix scaled by the regularization parameter $\lambda$) to $X^TX$ ensures numerical stability, even when $X^TX$ is ill-conditioned. The ridge solution is:
+
+$$\hat{\beta} = (X^TX + \lambda I_p)^{-1}X^Ty$$
+
+Unlike OLS, this solution remains stable for high-dimensional data or correlated predictors.
+
+---
+
+## Simple Example of Ridge Regression
+
+### Code: Simple Ridge Example
+
+To illustrate ridge regression, consider a dataset where we predict house prices ($y$) based on two features: house size ($X_1$) and number of rooms ($X_2$). Suppose we have the following dataset:
+
+| House Size ($X_1$) | Number of Rooms ($X_2$) | Price ($y$) |
+|-------------------|------------------------|-------------|
+| 1400              | 3                      | 300,000     |
+| 1600              | 3                      | 320,000     |
+| 1700              | 4                      | 340,000     |
+| 1875              | 4                      | 360,000     |
+| 1100              | 2                      | 280,000     |
+
+Using ordinary least squares (OLS) regression, the coefficients might be:
+
+$$\hat{\beta}_{OLS} = [150, 50]$$
+
+However, if the features (house size and number of rooms) are highly correlated, OLS regression may produce unstable coefficients. By applying ridge regression with $\lambda > 0$, the coefficients shrink:
+
+$$\hat{\beta}_{Ridge} = [140, 45]$$
+
+Here, the ridge regression coefficients are smaller in magnitude, reducing overfitting and increasing stability.
+
+```{r simple-example}
+library(ggplot2)
+library(reshape2)
+
+# Define dataset based on provided table
+data <- data.frame(
+  House_Size = c(1400, 1600, 1700, 1875, 1100),
+  Number_of_Rooms = c(3, 3, 4, 4, 2),
+  Price = c(300000, 320000, 340000, 360000, 280000)
+)
+
+# Simulating coefficients from OLS and Ridge Regression
+coefficients <- data.frame(
+  Feature = c("Intercept", "House Size (X1)", "Number of Rooms (X2)"),
+  OLS = c(50000, 150, 10000),
+  Ridge = c(60000, 120, 8000)
+)
+
+# Reshape data for ggplot
+coefficients_melted <- melt(coefficients, id.vars = "Feature", 
+                             variable.name = "Method", value.name = "Coefficient")
+
+# Line graph with grey area
+line_plot <- ggplot(coefficients_melted, aes(x = Feature, y = Coefficient, 
+                                              group = Method, color = Method)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 4, shape = 21, fill = "white") +
+  geom_ribbon(aes(ymin = Coefficient - 500, ymax = Coefficient + 500, fill = Method), 
+              alpha = 0.2) +
+  theme_minimal() +
+  labs(title = "Coefficient Shrinkage in Ridge Regression",
+       x = "Feature",
+       y = "Coefficient Value") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+print(line_plot)
+```
+
+### Interpretation of the Line Plot: Coefficient Shrinkage in Ridge Regression
+
+#### 1. Overview of the Plot
+
+This plot compares the regression coefficients obtained using Ordinary Least Squares (OLS) and Ridge Regression for three features:
+- Intercept
+- House Size ($X_1$)
+- Number of Rooms ($X_2$)
+
+The red line represents the OLS coefficients, and the blue line represents the Ridge coefficients. The circles indicate the exact coefficient values for each method.
+
+#### 2. Observations
+
+1. **Shrinkage of Ridge Regression Coefficients** - The Ridge regression coefficients (blue line) are smaller in magnitude compared to the OLS coefficients (red line). - This demonstrates the regularization effect of Ridge regression, which shrinks the coefficients toward zero.
+
+2. **Most Shrinkage in High-Magnitude Coefficients** - The Intercept shows noticeable shrinkage. - The House Size ($X_1$) and Number of Rooms ($X_2$) coefficients are also reduced, but their values remain relatively close to OLS.
+
+3. **Why Shrinkage Happens?** - Ridge regression penalizes large coefficients by adding a regularization term ($\lambda\sum\beta_j^2$), which prevents overfitting. - This is particularly useful in cases where features are correlated or when the dataset has a small number of observations.
+
+---
+
+## Benefits of Ridge Regression
+
+1. **Bias-Variance Trade-off:** Ridge regression introduces a bias by shrinking coefficients but reduces variance. This trade-off often results in a lower mean squared error (MSE) compared to OLS for unseen data.
+
+2. **Handles High-Dimensional Data:** Ridge regression can perform well even when the number of predictors exceeds the number of observations ($p > n$), where OLS fails.
+
+3. **Improved Prediction Accuracy:** By stabilizing coefficients and controlling model complexity, ridge regression often yields better predictive performance.
+
+### Applications of Ridge Regression
+
+- **Genomics and Bioinformatics:** Handling thousands of predictors in genetic studies.
+- **Environmental Studies:** Modeling pollution levels with highly correlated variables.
+- **Finance:** Predicting stock prices with numerous and often correlated economic indicators.
+
+---
+
+## Comparison to OLS: Effect of Ridge Regularization
+
+### OLS
+
+In ordinary least squares, we minimize the sum of squared residuals:
+
+$$\min_{\beta} \sum(y_i - \hat{y}_i)^2$$
+
+The coefficients are found by solving this optimization problem.
+
+### Ridge Regression
+
+Ridge modifies this by adding a penalty term for the sum of squared coefficients:
+
+$$\min_{\beta} \sum(y_i - \hat{y}_i)^2 + \lambda\sum\beta_j^2$$
+
+The term $\lambda\sum\beta_j^2$ is the regularization term, with $\lambda$ being a hyperparameter that controls the strength of the regularization. When $\lambda = 0$, Ridge regression is equivalent to OLS, but as $\lambda$ increases, the coefficients shrink more, leading to a simpler and more regularized model.
+
+### Impact of the Penalty
+
+The penalty term shrinks the coefficients towards zero, as opposed to OLS, which allows them to grow arbitrarily large in order to fit the data exactly. This leads to a more robust model, particularly when the number of predictors is large or there is multicollinearity among them.
+
+---
+
+## Applying Ridge Regression to the Internet Linear Dataset
+
+### Geometric Intuition of Ridge Regression
+
+Ridge regression introduces a penalty term that shrinks the regression coefficients towards zero. This effect can be visualized through coefficient shrinkage diagrams. The regularization helps prevent overfitting and ensures a more stable model when predictors are highly correlated.
+
+### Coefficient Shrinkage Visualization
+
+Using the `internetlinear.csv` dataset, we analyze how Ridge regression affects coefficient shrinkage compared to OLS.
+
+```{r load-data}
+library(readr)
+internetlinear <- read_csv("internetlinear.csv")
+View(internetlinear)
+```
+
+```{r coefficient-shrinkage}
+library(ggplot2)
+library(glmnet)
+library(dplyr)
+library(tidyr)
+
+# Define predictors and target variable
+X <- internetlinear %>% select(-usage)
+y <- internetlinear$usage
+
+# Standardize the predictors
+X_scaled <- scale(X)
+
+# Fit Ridge regression for different lambda values
+lambda_values <- 10^seq(-7, 7, length.out = 100)
+ridge_model <- glmnet(X_scaled, y, alpha = 0, lambda = lambda_values)
+
+# Extract coefficients properly
+ridge_coefs <- as.matrix(coef(ridge_model))
+ridge_coefs <- as.data.frame(t(ridge_coefs))
+ridge_coefs$lambda <- lambda_values
+
+# Reshape for plotting
+ridge_coefs <- ridge_coefs %>%
+  pivot_longer(cols = -lambda, names_to = "Feature", values_to = "Coefficient")
+
+# Plot coefficient shrinkage
+ggplot(ridge_coefs, aes(x = log10(lambda), y = Coefficient, color = Feature)) +
+  geom_line() +
+  labs(title = "Ridge Regression: Coefficient Shrinkage",
+       x = "log(Lambda)",
+       y = "Coefficient Value") +
+  theme_minimal()
+```
+
+---
+
+## Exhaustive Interpretation of Ridge Regression Coefficient Shrinkage Plot
+
+### Plot Overview
+
+**X-axis (log(Lambda)):** Represents the logarithm of the Ridge regularization parameter ($\lambda$).
+- Negative values (left side) indicate smaller $\lambda$, meaning less regularization (closer to OLS).
+- Positive values (right side) indicate larger $\lambda$, meaning stronger regularization (greater coefficient shrinkage).
+
+**Y-axis (Coefficient Value):** Represents the magnitude of the regression coefficients.
+- Higher values indicate stronger influence of the corresponding feature in the model.
+- As $\lambda$ increases, coefficients shrink toward zero.
+
+**Legend (Feature):** Displays the different features in the model. Different colors correspond to different predictors.
+
+### Observations from the Plot
+
+1. **Effect of $\lambda$ on Coefficient Shrinkage**
+   - When $\lambda$ is small (left side): Coefficients resemble OLS estimates with no regularization, so feature coefficients take on large magnitudes. Variables like `videohours`, `income`, and `webpages` have large coefficients.
+   - As $\lambda$ increases (moving right): Ridge regression shrinks all coefficients toward zero. High-magnitude coefficients decrease significantly.
+   - When $\lambda$ is very large (right side): Coefficients are heavily shrunk but do not reach zero completely. Ridge regression does not perform feature selection (unlike Lasso).
+
+2. **Different Shrinkage Rates for Features**
+   - **Strong shrinkage** (`videohours`, `income`, `webpages`): These features started with large coefficients, but their impact reduces significantly as $\lambda$ increases.
+   - **Mild shrinkage** (`age`, `gender`): These coefficients start relatively small and shrink slightly.
+   - **Intercept** (in red): Remains constant because Ridge regression does not penalize the intercept.
+
+3. **Interpretation of $\lambda$ Selection**
+   - Small $\lambda$ (left side): Model is complex, closer to OLS, susceptible to overfitting.
+   - Moderate $\lambda$ (center region): Optimal trade-off between bias and variance. Coefficients are stabilized.
+   - Large $\lambda$ (right side): Model is too simple, leading to underfitting.
+
+---
+
+## L2 Regularization in Ridge Regression
+
+### What is L2 Regularization?
+
+L2 regularization, also known as Tikhonov regularization, is the mathematical technique used in Ridge Regression to prevent overfitting by adding a penalty term to the loss function.
+
+**Standard OLS Objective:**
+
+$$\min_{\beta} \sum(y_i - \hat{y}_i)^2$$
+
+**Ridge Regression (L2 Regularization) Objective:**
+
+$$\min_{\beta} \sum(y_i - \hat{y}_i)^2 + \lambda\sum\beta_j^2$$
+
+where:
+- $\lambda$ is the regularization parameter (tuning strength of penalty).
+- $\sum\beta_j^2$ is the L2 penalty term, which forces large coefficients to shrink but never completely to zero.
+
+### Why Does Ridge Regression Shrink Coefficients?
+
+- Ridge regression reduces overfitting by discouraging large coefficient values.
+- The larger the $\lambda$, the more shrinkage is applied to the coefficients.
+- Unlike Lasso regression, Ridge does not perform feature selection—it retains all predictors, just shrinking them.
+
+### What Types of Variables Does Ridge Regression Shrink?
+
+#### Variables That Are Shrunk (Most Affected by L2 Regularization)
+
+1. **Continuous Numeric Variables:**
+   - Variables with large coefficient values shrink significantly.
+   - Examples: `income`, `videohours`, `webpages`
+   - Why? Ridge regression penalizes large coefficients to prevent overfitting.
+
+2. **Correlated Variables (Multicollinearity Impact):**
+   - Ridge is highly effective when features are correlated.
+   - Instead of arbitrarily selecting one variable, Ridge shrinks all correlated coefficients together.
+   - Example: If `income` and `webpages` are highly correlated, Ridge ensures neither dominates the model.
+
+3. **Polynomial & Interaction Terms:**
+   - If a model includes polynomial terms ($X^2, X^3$), Ridge shrinks these terms more aggressively than linear terms.
+   - Why? Higher-order terms contribute more to overfitting.
+
+#### Variables That Are Not Shrunk (Or Minimally Affected)
+
+1. **Intercept ($\beta_0$):**
+   - Ridge regression does not penalize the intercept to ensure proper model scaling.
+
+2. **Categorical Variables (Dummy Variables, One-Hot Encoding):**
+   - Example: `gender` (0 = Female, 1 = Male).
+   - Why? Since binary variables take values 0 or 1, excessive shrinkage could distort categorical effects.
+
+### The Impact of Different $\lambda$ Values
+
+| $\lambda$ Value | Effect on Coefficients | Interpretation |
+|----------------|------------------------|----------------|
+| Small ($\lambda \approx 0$) | Almost no shrinkage | Model behaves like OLS (risk of overfitting) |
+| Moderate ($\lambda > 4$) | Coefficients shrink | Controls variance and improves generalization |
+| Large ($\lambda$) | Heavy shrinkage | Model becomes too simple (risk of underfitting) |
+
+```{r mse-lambda}
+data <- as.data.frame(internetlinear)
+
+# Exclude categorical variables
+X <- data[, !(names(data) %in% c("usage", "gender"))]
+y <- data$usage
+
+# Standardize the predictors
+X_scaled <- scale(X)
+
+# Fit Ridge Regression using Cross-Validation
+set.seed(42)
+cv_ridge <- cv.glmnet(X_scaled, y, alpha = 0, nfolds = 10)
+
+# Extract relevant data
+lambda_values <- cv_ridge$lambda
+mse_values <- cv_ridge$cvm
+mse_sd <- cv_ridge$cvsd
+lambda_opt <- cv_ridge$lambda.min
+
+# Create dataframe for visualization
+mse_df <- data.frame(
+  log_lambda = log10(lambda_values),
+  MSE = mse_values,
+  MSE_upper = mse_values + mse_sd,
+  MSE_lower = mse_values - mse_sd
+)
+
+# Plot with legend
+ggplot(mse_df, aes(x = log_lambda, y = MSE)) +
+  geom_point(aes(color = "Ridge MSE"), size = 2) +
+  geom_errorbar(aes(ymin = MSE_lower, ymax = MSE_upper, color = "Error Bars"), width = 0.1) +
+  geom_vline(aes(xintercept = log10(lambda_opt), linetype = "Optimal Lambda"), color = "black") +
+  scale_color_manual(name = "Legend", values = c("Ridge MSE" = "red", "Error Bars" = "black")) +
+  scale_linetype_manual(name = "Legend", values = c("Optimal Lambda" = "dashed")) +
+  labs(title = "Mean Squared Error vs. log(Lambda) with Cross-Validation",
+       x = "log(Lambda)",
+       y = "Mean Squared Error") +
+  theme_minimal()
+```
+
+---
+
+## Differences Between Linear, Ridge, and Lasso Regression
+
+| Feature | Linear Regression | Ridge Regression | Lasso Regression |
+|---------|------------------|------------------|------------------|
+| Equation | OLS: Minimizes SSE | $\min_{\beta}\sum(y_i-\hat{y}_i)^2+\lambda\sum\beta_j^2$ | $\min_{\beta}\sum(y_i-\hat{y}_i)^2+\lambda\sum\|\beta_j\|$ |
+| Regularization Type | No Regularization | L2 Regularization | L1 Regularization |
+| Penalty Term | No penalty applied | $\lambda\sum\beta_j^2$ | $\lambda\sum\|\beta_j\|$ |
+| Effect on Coefficients | Uses OLS estimates | Shrinks coefficients but not to zero | Shrinks coefficients and can make some zero |
+| Feature Selection | No | No, all features contribute | Yes, irrelevant features removed |
+| Bias-Variance Tradeoff | Low bias, high variance | Slightly higher bias, lower variance | Higher bias, lower variance |
+| Computational Complexity | Moderate | Higher | Higher |
+| When to Use | No multicollinearity | Multicollinearity present, all features useful | Multicollinearity present, feature selection needed |
+| Handling Multicollinearity | Poor | Stabilizes coefficients | Eliminates unimportant coefficients |
+| Overfitting | Prone to overfitting | Reduces overfitting | Strongly reduces overfitting |
+
+---
+
+## Where is Ridge Regression Preferred?
+
+Ridge regression is preferred in scenarios where multicollinearity is present, and we want to retain all features while preventing overfitting. Here are specific cases where Ridge Regression is the best choice:
+
+### 1. Multicollinearity in Data
+
+**What happens in Linear Regression?**
+- When predictor variables (features) are highly correlated, the OLS method produces unstable coefficients (large swings in values with small changes in data).
+
+**Why Ridge Regression?**
+- Ridge stabilizes the coefficient estimates by adding an L2 penalty, ensuring the model is more robust and less sensitive to multicollinearity.
+
+**Example:**
+- Stock market data, where multiple factors (interest rates, economic indicators, etc.) are correlated.
+- Medical datasets, where different tests measure similar health factors.
+
+### 2. Large Number of Predictors (High-Dimensional Data)
+
+**What happens in Linear Regression?**
+- When the number of predictors is large (e.g., thousands of variables), OLS estimates tend to overfit.
+
+**Why Ridge Regression?**
+- Ridge shrinks coefficients and prevents overfitting, making it useful in high-dimensional datasets.
+
+**Example:**
+- Genomics (e.g., predicting diseases using thousands of genetic markers).
+- Image Processing (e.g., feature selection in computer vision models).
+
+### 3. When All Features Are Important
+
+**What happens in Lasso Regression?**
+- Lasso sets some coefficients exactly to zero, removing some features completely.
+
+**Why Ridge Regression?**
+- If we believe that all features contribute to the outcome, Ridge is a better choice since it shrinks coefficients without eliminating features.
+
+**Example:**
+- Weather Forecasting (where every factor like temperature, humidity, pressure, etc., has an impact).
+- Financial Modeling (where multiple economic indicators affect the outcome).
+
+### 4. When Interpretability is Not a Priority
+
+**Why Ridge and Not Lasso?**
+- Ridge regression does not eliminate variables, making interpretation harder.
+- If you need a simpler, more interpretable model with fewer variables, Lasso is better.
+- If you want a robust model that retains all variables, Ridge is the right choice.
+
+**Example:**
+- Machine Learning Pipelines (where interpretability is secondary to performance).
+
+### 5. When You Have Slightly More Predictors Than Observations
+
+- If the number of features is slightly greater than the number of samples, Ridge regression helps avoid overfitting.
+- If there are many more features than observations, Ridge still works, but sometimes Lasso or Elastic Net might be better.
+
+**Example:**
+- Predicting customer behavior in e-commerce (where data is sparse but has many features).
+
+---
+
+## Disadvantages of Ridge Regression
+
+1. **Does Not Perform Feature Selection** - Ridge regression shrinks coefficients but does not set any to zero. This means it keeps all predictors in the model, even if some have little impact. Unlike Lasso regression, it cannot remove irrelevant variables completely.
+
+2. **Sensitive to Feature Scaling** - Since ridge regression is based on penalizing the size of coefficients, the scale of the predictors matters. If features are not standardized, the model might assign too much weight to variables with larger ranges.
+
+3. **Not Ideal When All Features Are Important** - If all predictors in the dataset are relevant and contribute equally to the response variable, ridge regression may unnecessarily shrink some coefficients, reducing model interpretability and predictive accuracy.
+
+---
+
+## Implementation
+
+### Effect of Lambda on Coefficients
+
+```{r implementation}
+# Load necessary libraries
+library(glmnet)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+data <- read_csv("internetlinear.csv")
+
+# Separate predictors (X) and target variable (y)
+X <- as.matrix(data[, c("age", "gender", "webpages", "videohours", "income")])
+y <- data$usage
+
+# Standardize the predictors
+X <- scale(X)
+
+# Perform cross-validation to find the optimal lambda
+set.seed(1556)
+cv_ridge <- cv.glmnet(X, y, alpha = 0, nfolds = 10)
+
+# Fit Ridge Regression for a range of lambda values
+lambda_values <- 10^seq(10, -2, length = 100)
+ridge_model <- glmnet(X, y, alpha = 0, lambda = lambda_values)
+
+# Extract coefficients for each lambda
+coefficients <- coef(ridge_model, s = lambda_values)
+
+# Convert coefficients to a data frame for visualization
+coef_df <- as.data.frame(as.matrix(coefficients))
+coef_df <- coef_df[-1, ]
+coef_df$predictor <- rownames(coef_df)
+
+# Reshape the data for ggplot
+coef_df_long <- coef_df %>%
+  pivot_longer(cols = -predictor, names_to = "lambda_index", values_to = "coefficient") %>%
+  mutate(lambda = rep(log(lambda_values), each = nrow(coef_df)))
+
+# Plot the effect of lambda on coefficients
+ggplot(coef_df_long, aes(x = lambda, y = coefficient, color = predictor)) +
+  geom_line() +
+  labs(
+    title = "Effect of Lambda on Ridge Regression Coefficients",
+    x = "Log(Lambda)",
+    y = "Coefficient Value",
+    color = "Predictor"
+  ) +
+  theme_minimal()
+```
+
+#### Observations:
+
+- As the regularization parameter (lambda) increases, the coefficients of all predictors shrink towards zero.
+- The rate of shrinkage differs between predictors; some shrink faster than others, indicating they are less influential in the model.
+- At very high lambda values, coefficients approach zero, resulting in a heavily simplified model.
+
+#### Interpretation:
+
+- Small values of lambda produce coefficients similar to those in OLS regression, indicating minimal regularization.
+- Large values of lambda apply significant penalties, reducing the influence of less important predictors.
+- The optimal lambda (identified via cross-validation) balances model complexity and predictive performance.
+
+#### Conclusion:
+
+The plot demonstrates how Ridge Regression helps control over-fitting by shrinking coefficients. The optimal lambda ensures the model generalizes well without losing critical predictive information.
+
+---
+
+### Ridge vs. OLS Coefficients Comparison
+
+```{r ridge-ols-comparison}
+data <- read_csv("internetlinear.csv")
+
+# Separate predictors (X) and target variable (y)
+X <- as.matrix(data[, c("age", "webpages", "videohours", "income")])
+y <- data$usage
+
+# Standardize the predictors
+X <- scale(X)
+
+# Perform cross-validation to find the optimal lambda
+set.seed(1556)
+cv_ridge <- cv.glmnet(X, y, alpha = 0, nfolds = 10)
+
+# Extract the optimal lambda value for Ridge
+optimal_lambda <- cv_ridge$lambda.min
+cat("Optimal Lambda for Ridge:", optimal_lambda, "\n")
+
+# Fit Ridge Regression for the optimal lambda
+ridge_model <- glmnet(X, y, alpha = 0, lambda = optimal_lambda)
+
+# Extract coefficients for Ridge model
+ridge_coefficients <- coef(ridge_model, s = optimal_lambda)
+ridge_coefficients <- as.matrix(ridge_coefficients)
+
+if (nrow(ridge_coefficients) > 1) {
+  ridge_coef_df <- data.frame(predictor = rownames(ridge_coefficients)[-1],
+                               coefficient = ridge_coefficients[-1, 1])
+  ridge_coef_df$model <- "Ridge"
+  
+  cat("Ridge Regression Coefficients:\n")
+  print(ridge_coef_df)
+} else {
+  print("No coefficients extracted from Ridge model.")
+}
+
+# Fit OLS model
+ols_model <- lm(y ~ X)
+ols_coefficients <- coef(ols_model)[-1]
+
+# Convert OLS coefficients to a data frame
+ols_coef_df <- data.frame(predictor = names(ols_coefficients), 
+                           coefficient = ols_coefficients)
+ols_coef_df$model <- "OLS"
+
+cat("OLS Regression Coefficients:\n")
+print(ols_coef_df)
+
+# Combine all coefficients
+coef_comparison_df <- rbind(ridge_coef_df, ols_coef_df)
+
+# Create a bar plot
+ggplot(coef_comparison_df, aes(x = predictor, y = coefficient, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(coefficient, 2)), position = position_dodge(0.8), vjust = -0.5) +
+  labs(title = "Comparison of Ridge vs OLS Coefficients",
+       subtitle = paste("Optimal Lambda for Ridge:", round(optimal_lambda, 2)),
+       x = "Predictor", y = "Coefficient Value") +
+  scale_fill_manual(values = c("Ridge" = "blue", "OLS" = "orange")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+#### Observations:
+
+- Ridge Regression generally produces smaller coefficients than OLS due to the regularization penalty.
+- However, for the `income` predictor, the Ridge coefficient is larger than the OLS coefficient.
+- This deviation suggests that Ridge Regression redistributes importance among predictors when multicollinearity exists.
+
+#### Interpretation:
+
+- Ridge Regression adjusts coefficients to minimize both the residual sum of squares and the penalty term.
+- The OLS model does not penalize coefficients, so it assigns weights solely based on minimizing residual error.
+
+#### Conclusion:
+
+- The higher Ridge coefficient for `income` suggests that this variable has a stronger overall relationship with the target variable, `usage`, when considered in a regularized context.
+- Ridge Regression emphasizes the stability of the model over the magnitude of individual coefficients.
+
+---
+
+## Comparison with Lasso and Elastic Net Regression
+
+### Observation:
+
+- **Ridge Regression** applies a penalty to shrink all coefficients but never eliminates predictors.
+- **Lasso Regression** introduces sparsity by shrinking some coefficients to exactly zero, effectively removing irrelevant predictors.
+- **Elastic Net** combines the penalties of Ridge and Lasso, striking a balance between reducing multicollinearity and performing feature selection.
+
+### Interpretation:
+
+- Ridge Regression excels when multicollinearity is present, as it reduces the variability in coefficient estimates without discarding any predictors.
+- Lasso is most useful when there are many predictors, and some are likely irrelevant.
+- Elastic Net is versatile for datasets where predictors exhibit multicollinearity, and the model also needs to identify and remove irrelevant predictors.
+
+### Conclusion:
+
+- **When to use Ridge:** When all predictors are expected to influence the target variable, even if their effects are small.
+- **When to use Lasso:** For high-dimensional data or scenarios where only a subset of predictors is believed to be truly significant.
+- **When to use Elastic Net:** When predictors are both highly correlated and when some predictors are expected to be irrelevant.
+
+---
+
+## Part 10: Implementation - Model Performance
+
+### 1. Model Performance
+
+```{r model-performance}
+library(glmnet)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(caret)
+library(car)
+
+# Display structure of dataset
+str(internetlinear)
+summary(internetlinear)
+
+# Define predictors and target variable
+X <- internetlinear[, c("age", "webpages", "videohours", "income")]
+y <- internetlinear$usage
+
+# Standardize the predictors
+X_scaled <- scale(X)
+X_scaled_df <- as.data.frame(X_scaled)
+X_scaled_df$usage <- y
+
+# Split data into training (80%) and testing (20%)
+set.seed(42)
+train_indices <- sample(seq_len(nrow(X_scaled_df)), size = 0.8 * nrow(X_scaled_df))
+train_data <- X_scaled_df[train_indices, ]
+test_data <- X_scaled_df[-train_indices, ]
+
+X_train <- train_data[, -ncol(train_data)]
+X_test <- test_data[, -ncol(test_data)]
+y_train <- train_data$usage
+y_test <- test_data$usage
+
+# 1. Ordinary Least Squares (OLS)
+ols_model <- lm(usage ~ ., data = train_data)
+ols_predictions <- predict(ols_model, newdata = test_data)
+
+# Compute OLS Performance Metrics
+ols_mse <- mean((y_test - ols_predictions)^2)
+ols_r2 <- 1 - sum((y_test - ols_predictions)^2) / sum((y_test - mean(y_test))^2)
+
+# 2. Ridge Regression
+set.seed(42)
+lambda_values <- 10^seq(-5, 5, length.out = 100)
+ridge_model <- glmnet(as.matrix(X_train), y_train, alpha = 0, lambda = lambda_values)
+
+# Find optimal lambda via cross-validation
+cv_ridge <- cv.glmnet(as.matrix(X_train), y_train, alpha = 0, lambda = lambda_values, nfolds = 10)
+ridge_lambda_opt <- cv_ridge$lambda.min
+
+# Make predictions with optimal Ridge model
+ridge_predictions <- predict(ridge_model, s = ridge_lambda_opt, newx = as.matrix(X_test))
+
+# Compute Ridge Performance Metrics
+ridge_mse <- mean((y_test - ridge_predictions)^2)
+ridge_r2 <- 1 - sum((y_test - ridge_predictions)^2) / sum((y_test - mean(y_test))^2)
+
+# 3. Compare Model Performance at Different Lambda Values
+ridge_mse_values <- sapply(lambda_values, function(l) {
+  predictions <- predict(ridge_model, s = l, newx = as.matrix(X_test))
+  mean((y_test - predictions)^2)
+})
+
+lambda_comparison_df <- data.frame(
+  Lambda = lambda_values,
+  MSE = ridge_mse_values
+)
+
+# Plot Lambda vs. MSE
+ggplot(lambda_comparison_df, aes(x = log10(Lambda), y = MSE)) +
+  geom_line(color = "blue") +
+  geom_point(aes(x = log10(ridge_lambda_opt), y = ridge_mse), color = "red", size = 3) +
+  labs(title = "Ridge Regression: Lambda vs. MSE",
+       x = "log(Lambda)", y = "Mean Squared Error") +
+  theme_minimal()
+
+# 4. Compare Ridge Coefficients Across Different Lambda Values
+ridge_coefficients <- as.matrix(coef(ridge_model))
+ridge_coefficients_df <- data.frame(t(ridge_coefficients))
+ridge_coefficients_df$Lambda <- lambda_values
+
+# Reshape for plotting
+ridge_coefficients_long <- ridge_coefficients_df %>%
+  pivot_longer(cols = -Lambda, names_to = "Feature", values_to = "Coefficient")
+
+# Plot coefficient shrinkage
+ggplot(ridge_coefficients_long, aes(x = log10(Lambda), y = Coefficient, color = Feature)) +
+  geom_line() +
+  labs(title = "Ridge Regression: Effect of Lambda on Coefficients",
+       x = "log(Lambda)", y = "Coefficient Value") +
+  theme_minimal()
+
+# 5. Model Performance Comparison
+performance_df <- data.frame(
+  Model = c("OLS", "Ridge Regression (Optimal Lambda)"),
+  MSE = c(ols_mse, ridge_mse),
+  R2 = c(ols_r2, ridge_r2)
+)
+
+print("Model Performance Comparison:")
+print(performance_df)
+
+# 6. Actual vs Predicted Plot
+ols_vs_ridge_df <- data.frame(
+  Actual = y_test,
+  OLS_Predicted = ols_predictions,
+  Ridge_Predicted = as.vector(ridge_predictions)
+)
+
+ggplot(ols_vs_ridge_df, aes(x = Actual)) +
+  geom_point(aes(y = OLS_Predicted, color = "OLS")) +
+  geom_point(aes(y = Ridge_Predicted, color = "Ridge")) +
+  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+  labs(title = "Comparison of OLS and Ridge Regression Predictions",
+       x = "Actual Values", y = "Predicted Values") +
+  scale_color_manual(name = "Model", values = c("OLS" = "red", "Ridge" = "blue")) +
+  theme_minimal()
+```
+
+### Interpretation
+
+#### Observations:
+
+- The calculated R-squared value indicates how well the model explains variance in the data.
+- If R² is close to 1, the model fits the data well; if near 0, it has poor predictive power.
+
+#### Model Performance Results:
+
+1. The OLS model has an MSE of approximately 18,454,658 and an R² of 0.767. This means about 76.7% of the variability in usage is explained by the predictors.
+
+2. The Ridge Regression model (with optimal lambda) has a slightly lower MSE of 18,366,683 and a slightly higher R² of 0.768.
+
+3. Although the differences are small, the improvement with Ridge regression can be meaningful when predictors are correlated or when overfitting is a concern.
+
+#### Conclusion:
+
+- A high R² suggests that Ridge Regression effectively captures the relationship between predictors and internet usage.
+- The model's performance validates the effectiveness of Ridge Regression.
+- The regularization penalty ensures a stable, generalizable model that minimizes prediction errors.
+
+### 2. Actual vs. Predicted Plot
+
+#### Observations:
+
+- The scatter plot compares actual vs. predicted values, assessing model reliability.
+- A strong correlation suggests good predictive accuracy, while large deviations indicate potential model weaknesses.
+- The dashed red line represents the ideal case (perfect predictions).
+
+#### Interpretation:
+
+- If points closely follow the red line, predictions are accurate.
+- Large deviations suggest areas where the model struggles to generalize.
+- A well-fitted model should show a clear linear pattern in the scatter plot.
+
+---
+
+## Practical Comparison of OLS vs RIDGE
+
+### Handling Highly Correlated Predictors
+
+When predictors are highly correlated, OLS can yield unstable estimates because it tries to fit the data exactly without any constraint. In practice, this might force you to remove or merge correlated variables to avoid multicollinearity, potentially discarding useful information. In contrast, Ridge regression tackles multicollinearity by penalizing the size of the coefficients (after scaling), which shrinks them without removing any predictors from the model.
+
+Thus, when dealing with highly correlated variables:
+
+- **OLS** may perform poorly unless you manually adjust the model (by removing or combining predictors), which can be both arbitrary and lead to loss of information.
+- **Ridge Regression** automatically stabilizes the coefficient estimates through regularization, retaining all predictors while reducing the risk of overfitting.
+
+---
+
+## Why videohours Shows Longer Shrinkage
+
+The graph for `videohours` looks longer than `age` or others because its coefficient changes more as lambda increases. This happens for a few reasons:
+
+1. **Larger Initial Coefficient:** `videohours` likely starts with a bigger coefficient, so the shrinkage effect is more noticeable.
+
+2. **Stronger Predictor:** It might have a stronger relationship with the target (`usage`), so its coefficient is larger and shrinks more visibly.
+
+3. **Scale Differences:** If `videohours` is on a larger scale (e.g., 0-100 vs. 0-1 for age), its coefficient could naturally be bigger, even after scaling.
+
+4. **Multicollinearity:** If `videohours` is correlated with other predictors, ridge regression shrinks it more to reduce instability.
