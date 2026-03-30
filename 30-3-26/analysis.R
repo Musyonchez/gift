@@ -73,7 +73,7 @@ ggsave("fig1_age_distribution.png", p1, width = 7, height = 4, dpi = 150)
 df_long_k <- df %>%
   select(Knowledge_Before, Knowledge_After) %>%
   pivot_longer(everything(), names_to = "Period", values_to = "Score") %>%
-  mutate(Period = recode(Period,
+  mutate(Period = dplyr::recode(Period,
     "Knowledge_Before" = "Before CHOP",
     "Knowledge_After"  = "After CHOP"))
 
