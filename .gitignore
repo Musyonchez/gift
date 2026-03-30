@@ -14,7 +14,6 @@ __pycache__/
 
 # Generated figures
 *.png
-*.pdf
 
 # OS
 .DS_Store
