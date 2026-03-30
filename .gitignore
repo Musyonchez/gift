@@ -1,0 +1,21 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# R artifacts
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Generated figures
+*.png
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
