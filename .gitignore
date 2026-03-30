@@ -6,9 +6,6 @@ __pycache__/
 *.pyc
 *.pyo
 
-*.png
-*.Rproj
-
 # OS
 .DS_Store
 Thumbs.db
