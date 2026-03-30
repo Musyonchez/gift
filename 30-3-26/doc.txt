@@ -1,0 +1,12 @@
+I hope you are well.
+
+Please find attached the Group Assignment Package for our STA 2030: Statistical Inference course. This project will allow you to apply the full range of inferential techniques covered in class, including estimation, hypothesis testing, ANOVA, chi-square tests, non-parametric methods, and R programming
+
+Each group is required to:
+
+Analyze the dataset using appropriate statistical inference methods.
+Submit a written report, R script, and presentation slides.
+Ensure that all interpretations are clear, data-driven, and well-supported.
+Please begin working on the assignment as early as possible and distribute tasks among your group members. Should you have any questions or need clarification, feel free to reach out during consultation hours.
+
+I look forward to your thoughtful analyses and presentations. hii ndio instructions
