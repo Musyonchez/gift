@@ -6,15 +6,6 @@ __pycache__/
 *.pyc
 *.pyo
 
-# R artifacts
-.Rhistory
-.RData
-.Rproj.user/
-*.Rproj
-
-# Generated figures
-*.png
-
 # OS
 .DS_Store
 Thumbs.db
