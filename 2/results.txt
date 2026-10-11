@@ -1,0 +1,140 @@
+=== 1. DATA ===
+Observations: 415 | from 1992-01-01 to 2026-07-01 | missing: 0
+count    415.00
+mean     256.34
+std       60.08
+min      143.37
+25%      203.41
+50%      252.51
+75%      303.78
+max      403.03
+
+Annual mean price (cents/kg), selected years:
+observation_date
+1992-01-01    199.7
+2000-01-01    248.1
+2008-01-01    269.5
+2011-01-01    346.2
+2014-01-01    237.9
+2020-01-01    253.9
+2022-01-01    277.9
+2025-01-01    316.8
+Largest monthly value: 2015-07-01 403.0 | Smallest: 1995-07-01 143.4
+Skewness 0.277, excess kurtosis -0.917
+
+Average seasonal ratio (price / centred 12-month mean) by month:
+                    mean     std
+observation_date                
+1                 1.0223  0.0709
+2                 1.0341  0.0771
+3                 1.0093  0.0532
+4                 0.9696  0.0586
+5                 0.9555  0.0617
+6                 0.9546  0.0609
+7                 0.9724  0.0747
+8                 0.9988  0.0582
+9                 1.0389  0.0574
+10                1.0257  0.0611
+11                1.0062  0.0688
+12                1.0049  0.0703
+One-way ANOVA of seasonal ratio across months: F=7.024, p=0.0000
+Kruskal-Wallis: H=72.084, p=0.0000
+
+STL (log scale): strength of trend = 0.896, strength of seasonality = 0.139
+
+Periodogram of log-differences (cycles/year -> period in months), top 5 peaks:
+  freq 2.000 cyc/yr  period 6.0 months  power 0.00778
+  freq 2.029 cyc/yr  period 5.9 months  power 0.00549
+  freq 3.072 cyc/yr  period 3.9 months  power 0.00451
+  freq 1.681 cyc/yr  period 7.1 months  power 0.00448
+  freq 2.667 cyc/yr  period 4.5 months  power 0.00351
+
+=== 2. STATIONARITY TESTS ===
+Level                      ADF stat  -2.063 p=0.2598 | KPSS stat  2.061 p=<=0.01
+Log level                  ADF stat  -1.995 p=0.2889 | KPSS stat  2.171 p=<=0.01
+First difference of log    ADF stat  -8.788 p=0.0000 | KPSS stat  0.043 p=>=0.10
+First difference of level  ADF stat  -9.073 p=0.0000 | KPSS stat  0.036 p=>=0.10
+Seasonal diff (12) of log  ADF stat  -4.742 p=0.0001 | KPSS stat  0.038 p=>=0.10
+Ljung-Box on first difference of log (autocorrelation present if p small):
+     lb_stat  lb_pvalue
+12  70.5303        0.0
+24  84.2287        0.0
+ACF of differenced log, lags 1-6: [ 0.164 -0.196 -0.171 -0.038  0.093  0.067]  PACF lags 1-6: [ 0.164 -0.23  -0.103 -0.035  0.056  0.012]
+Annualised volatility of monthly log-returns: 23.0%
+ARCH-LM test on log-returns: LM p=0.0000
+
+=== 3. FORECASTING (hold-out: last 36 months) ===
+Train: 1992-01-01 to 2023-07-01 (379) | Test: 2023-08-01 to 2026-07-01 (36)
+Holt-Winters params: alpha=1.000 beta=0.000 gamma=0.000 phi=0.800
+
+ARIMA order search on log(train), AIC (d fixed at 1 per stationarity tests):
+  top 5 by AIC (aic, bic, p, q): [(np.float64(-992.7), np.float64(-969.1), 2, 3), (np.float64(-992.6), np.float64(-976.9), 3, 0), (np.float64(-992.4), np.float64(-976.7), 2, 1), (np.float64(-991.3), np.float64(-971.6), 2, 2), (np.float64(-991.3), np.float64(-975.5), 1, 2)]
+  best by BIC: p=2 q=0
+Seasonal-ARIMA search (aic, p, q, P, Q) top 5: [(np.float64(-994.4), 2, 1, 1, 1), (np.float64(-993.7), 2, 0, 1, 1), (np.float64(-992.4), 2, 1, 0, 0), (np.float64(-990.9), 2, 0, 0, 0), (np.float64(-990.7), 2, 1, 1, 0)]
+Seasonal-ARIMA best vs plain ARIMA AIC: -994.4 vs -992.7
+
+Hold-out accuracy (36 months):
+                                          MAE    RMSE    MAPE   sMAPE  fit_time_s
+model                                                                            
+Gradient boosting (lags)               27.738  32.709   8.535   8.981       0.370
+Ridge (lags)                           35.575  40.242  10.929  11.721       0.184
+SARIMA(2,1,1)(1,0,1)12 on log          37.428  42.161  11.496  12.369       1.717
+Holt-Winters (damped, mult. seasonal)  38.783  42.835  11.970  12.881       0.137
+Drift                                  39.039  44.208  11.978  12.935       0.000
+Holt (damped trend)                    41.833  46.719  12.855  13.939       0.041
+Random forest (lags)                   43.942  47.552  13.585  14.721       1.494
+Naive (last value)                     42.961  47.679  13.215  14.348       0.000
+Simple exp. smoothing                  42.961  47.679  13.215  14.348       0.021
+ARIMA(2,1,3) on log                    43.102  47.802  13.260  14.400       0.448
+Seasonal naive                         46.696  50.786  14.437  15.749       0.000
+
+Best RMSE on hold-out: Gradient boosting (lags)
+  DM test vs Naive: Seasonal naive                           stat  11.20 p=0.000
+  DM test vs Naive: Drift                                    stat  -3.05 p=0.004
+  DM test vs Naive: Simple exp. smoothing                    stat   4.40 p=0.000
+  DM test vs Naive: Holt (damped trend)                      stat  -3.19 p=0.003
+  DM test vs Naive: Holt-Winters (damped, mult. seasonal)    stat  -3.90 p=0.000
+  DM test vs Naive: ARIMA(2,1,3) on log                      stat   2.39 p=0.023
+  DM test vs Naive: SARIMA(2,1,1)(1,0,1)12 on log            stat  -6.35 p=0.000
+  DM test vs Naive: Random forest (lags)                     stat  -0.10 p=0.920
+  DM test vs Naive: Gradient boosting (lags)                 stat  -3.04 p=0.004
+  DM test vs Naive: Ridge (lags)                             stat  -6.06 p=0.000
+
+=== 4. ROLLING-ORIGIN EVALUATION (horizon 12, 8 origins) ===
+                   mean RMSE    std    min    max
+Holt-Winters           27.07  17.97   8.80  64.67
+Gradient boosting      28.34  16.49   9.69  63.37
+ARIMA(2,1,3)           29.39  18.25  10.54  65.88
+Drift                  29.81  18.38   7.81  67.24
+Holt (damped)          29.98  18.77   8.19  67.85
+Naive                  30.00  18.92   8.47  68.03
+Random forest          31.08  15.81  13.56  57.54
+
+=== 5. DIAGNOSTICS (ARIMA on training log data) ===
+Ljung-Box on residuals:
+     lb_stat  lb_pvalue
+12  19.4305     0.0787
+24  30.6332     0.1646
+Jarque-Bera: stat=9.34 p=0.009356 (skew -0.05, kurt 0.76)
+ARCH-LM on residuals: p=0.0000
+==============================================================================
+                 coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------
+ar.L1          1.0496      0.115      9.148      0.000       0.825       1.274
+ar.L2         -0.7809      0.087     -8.989      0.000      -0.951      -0.611
+ma.L1         -0.8739      0.124     -7.023      0.000      -1.118      -0.630
+ma.L2          0.4268      0.114      3.737      0.000       0.203       0.651
+ma.L3          0.1967      0.060      3.301      0.001       0.080       0.313
+sigma2         0.0041      0.000     15.587      0.000       0.004       0.005
+==============================================================================
+
+=== 6. FINAL FORECAST (best simple model refit on all data) ===
+            forecast   lo80   hi80   lo95   hi95  holt_winters  gradient_boosting
+2026-08-01     274.1  252.9  297.1  242.4  310.1         279.9              279.7
+2027-01-01     273.0  224.2  332.4  202.0  369.0         285.7              292.6
+2027-07-01     273.5  205.7  363.5  177.0  422.6         273.1              287.9
+2028-01-01     273.7  192.8  388.5  160.2  467.7         285.7              294.6
+2028-07-01     273.8  182.7  410.5  147.4  508.6         273.1              285.4
+Hold-out coverage of nominal 80% interval: 86%, 95% interval: 100%
+
+Done.

@@ -195,9 +195,11 @@ R["holdout"] = res.round(4).reset_index().to_dict("records")
 
 # Diebold-Mariano (squared error) vs Naive for top models
 def dm(a, f1, f2, h=1):
-    e1, e2 = a - f1, a - f2; d = e1 ** 2 - e2 ** 2; n = len(d)
-    var = np.var(d, ddof=0); g = [np.mean((d[k:] - d.mean()) * (d[:-k] - d.mean())) for k in range(1, h)]
-    v = (var + 2 * sum(g)) / n; st = d.mean() / np.sqrt(v); return st, 2 * (1 - stats.norm.cdf(abs(st)))
+    """Diebold-Mariano test (squared error loss, Bartlett-weighted long-run variance, Harvey small-sample correction)."""
+    d = (a - f1) ** 2 - (a - f2) ** 2; n = len(d); dc = d - d.mean()
+    lrv = np.mean(dc ** 2) + 2 * sum((1 - k / h) * np.mean(dc[k:] * dc[:-k]) for k in range(1, h))
+    st = d.mean() / np.sqrt(lrv / n) * np.sqrt((n + 1 - 2 * h + h * (h - 1) / n) / n)
+    return st, 2 * (1 - stats.t.cdf(abs(st), n - 1))
 best_name = res["RMSE"].idxmin(); print("\nBest RMSE on hold-out:", best_name)
 for nm in res.index:
     if nm != "Naive (last value)":
@@ -214,7 +216,7 @@ plt.tight_layout(); plt.savefig("figs/fig6_holdout.png", dpi=150); plt.close()
 # ---------- rolling-origin evaluation (12-month horizon, 8 origins, yearly)
 print("\n=== 4. ROLLING-ORIGIN EVALUATION (horizon 12, 8 origins) ===")
 origins = [len(y) - 12 * k for k in range(8, 0, -1)]
-roll = {k: [] for k in ["Naive", "Drift", "Holt (damped)", "Holt-Winters", "ARIMA(%d,1,%d)" % (aic_p, aic_q), "Random forest"]}
+roll = {k: [] for k in ["Naive", "Drift", "Holt (damped)", "Holt-Winters", "ARIMA(%d,1,%d)" % (aic_p, aic_q), "Random forest", "Gradient boosting"]}
 for o in origins:
     tr_, te_ = y.iloc[:o], y.iloc[o:o + 12]
     if len(te_) < 12: continue
@@ -227,6 +229,8 @@ for o in origins:
     lt = np.log(tr_); Xa = feats(lt); tg = lt.diff(); ok_ = Xa.dropna().index.intersection(tg.dropna().index)
     rf = RandomForestRegressor(300, min_samples_leaf=5, random_state=SEED, n_jobs=1).fit(Xa.loc[ok_].values, tg.loc[ok_].values)
     roll["Random forest"].append(np.sqrt(np.mean((a - recursive(rf, lt.copy(), 12)) ** 2)))
+    gb = GradientBoostingRegressor(n_estimators=200, max_depth=2, learning_rate=0.05, subsample=0.8, random_state=SEED).fit(Xa.loc[ok_].values, tg.loc[ok_].values)
+    roll["Gradient boosting"].append(np.sqrt(np.mean((a - recursive(gb, lt.copy(), 12)) ** 2)))
 rr = pd.DataFrame({k: [np.mean(v), np.std(v), np.min(v), np.max(v)] for k, v in roll.items()}, index=["mean RMSE", "std", "min", "max"]).T
 print(rr.round(2).sort_values("mean RMSE").to_string())
 R["rolling"] = rr.round(3).reset_index().rename(columns={"index": "model"}).to_dict("records")
@@ -254,6 +258,9 @@ fidx = pd.date_range(y.index[-1] + pd.offsets.MonthBegin(1), periods=H2, freq="M
 final = pd.DataFrame({"forecast": np.exp(fc.predicted_mean.values), "lo80": ci.iloc[:, 0].values, "hi80": ci.iloc[:, 1].values, "lo95": ci95.iloc[:, 0].values, "hi95": ci95.iloc[:, 1].values}, index=fidx)
 hw_full = ExponentialSmoothing(y, trend="add", damped_trend=True, seasonal="mul", seasonal_periods=12, initialization_method="estimated").fit()
 final["holt_winters"] = hw_full.forecast(H2).values
+_ly = np.log(y); _X = feats(_ly); _t = _ly.diff(); _ok = _X.dropna().index.intersection(_t.dropna().index)
+_gb = GradientBoostingRegressor(n_estimators=200, max_depth=2, learning_rate=0.05, subsample=0.8, random_state=SEED).fit(_X.loc[_ok].values, _t.loc[_ok].values)
+final["gradient_boosting"] = recursive(_gb, _ly.copy(), H2)
 print(final.round(1).iloc[[0, 5, 11, 17, 23]].to_string())
 final.to_csv("final_forecast_24m.csv")
 # empirical interval coverage of the ARIMA 80/95% intervals on the hold-out
@@ -262,7 +269,7 @@ cov80 = np.mean((test.values >= c80.iloc[:, 0].values) & (test.values <= c80.ilo
 print("Hold-out coverage of nominal 80%% interval: %.0f%%, 95%% interval: %.0f%%" % (cov80 * 100, cov95 * 100))
 fig, ax = plt.subplots(figsize=(10, 5)); ax.plot(y.loc["2015":], color="k", lw=1.2, label="Actual")
 ax.plot(final.forecast, color="#c0392b", lw=2, label="ARIMA forecast"); ax.fill_between(final.index, final.lo95, final.hi95, color="#c0392b", alpha=0.15, label="95% interval"); ax.fill_between(final.index, final.lo80, final.hi80, color="#c0392b", alpha=0.3, label="80% interval")
-ax.plot(final.holt_winters, color="#e67e22", ls="--", label="Holt-Winters"); ax.set_title("Fig 8: 24-month forecast of the tea price"); ax.set_ylabel("US cents per kg"); ax.legend()
+ax.plot(final.holt_winters, color="#e67e22", ls="--", label="Holt-Winters"); ax.plot(final.gradient_boosting, color="#2980b9", ls=":", label="Gradient boosting"); ax.set_title("Fig 8: 24-month forecast of the tea price"); ax.set_ylabel("US cents per kg"); ax.legend()
 plt.tight_layout(); plt.savefig("figs/fig8_final_forecast.png", dpi=150); plt.close()
 
 # save for dashboard
